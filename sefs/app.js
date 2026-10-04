@@ -1,5 +1,5 @@
 (function(){"use strict";
-var dims=window.SEFS_DIMS;var RK=window.ResultKit;if(RK)RK.configure({id:"sefs",title:"SEFS 主观体验功能状态量表"});
+var dims=window.SEFS_DIMS;var RK=window.ResultKit;if(RK)RK.configure({id:"sefs",title:"SEFS 主观体验功能状态量表",start:["#startBtn"]});
 var labels=["完全不符合","偶尔符合","有时符合","经常符合","几乎总是符合"];
 var KEY="sefs-v1-session",HKEY="sefs-v1-history",MAX=30;var ans=Array(24).fill(null),idx=0,agreed=false,timer=0,view="cover",shown=null,curId=null,saveState="none",histFrom="cover",confirmCb=null;
 function el(id){return document.getElementById(id)}

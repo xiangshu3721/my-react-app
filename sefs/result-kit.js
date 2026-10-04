@@ -8,8 +8,10 @@
  *   2. 交卷那一刻：ResultKit.save(summary)         // summary 见下
  *   3. 结果页里放：ResultKit.bar(summary)           // 返回一段 HTML：导出图片 / 历史记录 / 重新测试
  *
- * 昵称门槛：开始答题前调用 ResultKit.ensureNick(function(){ …真正开始… })；每次渲染时调用
- *   ResultKit.guard(是否处在答题中, 取消后回封面的函数)，深链/刷新恢复进度也会先补录昵称；重新测试时调 ResultKit.nickReset()。
+ * 昵称门槛（内嵌，不开新页面）：configure 里给 start: ["开始按钮的选择器", …]（或 {sel, text, host}），
+ *   kit 会在原有开始页的「开始」按钮前插入昵称输入框，没填昵称时按钮禁用；点开始即确认昵称。
+ *   深链/刷新恢复进度直接落在答题页时，每次渲染调用 ResultKit.guard(是否处在答题中, 返回封面的函数)，
+ *   会在当前页面最上方内嵌一块输入框补录；重新测试时调 ResultKit.nickReset()。
  * 导出图：configure 时给 capture: function(){ return ResultKit.capture(结果页根节点, {skip:"选择器"}) }，
  *   导出的长图会把结果页展示的全部板块（含图表）画进去，并显示「昵称 的测评结果」。
  *
@@ -26,7 +28,7 @@
 
   var MAX = 30;                       // 每个测试最多保留的记录数
   var PREFIX = "rk.v1.";              // localStorage key 前缀，后面接测试 id
-  var cfg = { id: "test", title: "测试", site: "ASVA 常用心理测试", onRestart: null, url: "", capture: null, exporter: null };
+  var cfg = { id: "test", title: "测试", site: "ASVA 常用心理测试", onRestart: null, url: "", capture: null, exporter: null, start: null };
   var mem = {};                       // 存不进 localStorage 时，本次访问内仍可查看
   var lastSave = null;                // { ok, reason }
   var cur = null;                     // 结果页当前这份 summary
@@ -218,16 +220,18 @@
       ".rk-img{display:block;max-width:100%;height:auto;margin:0 auto;border-radius:6px;box-shadow:0 2px 14px rgba(36,28,24,.25);-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}",
       ".rk-tip{margin:0 0 12px;text-align:center;font-size:14px;line-height:1.6;color:" + INK + "}",
       ".rk-tip b{color:" + GREEN + "}",
-      ".rk-nick{position:fixed;inset:0;z-index:2147483400;background:rgba(36,28,24,.66);display:flex;align-items:center;justify-content:center;padding:20px;font-family:" + SANS + "}",
-      ".rk-nick *{box-sizing:border-box}",
-      ".rk-nick .box{width:100%;max-width:380px;background:" + PAPER + ";border-radius:4px 22px 4px 22px;padding:22px 20px 18px;color:" + INK + ";border:1px solid " + GOLD + ";box-shadow:0 10px 36px rgba(0,0,0,.3)}",
-      ".rk-nick h3{margin:0 0 6px;font:600 21px/1.4 " + SERIF + "}",
-      ".rk-nick p{margin:0 0 12px;font-size:14px;line-height:1.65;color:" + MUTED + "}",
-      ".rk-nick .f{display:block}.rk-nick .f span{display:block;margin:0 0 6px;font-size:13px;color:" + SLATE + "}",
-      ".rk-nick input{display:block;width:100%;min-height:48px;padding:10px 14px;border:1.5px solid " + INK + ";border-radius:12px;background:#fff;color:" + INK + ";font:inherit;font-size:17px}",
-      ".rk-nick input:focus-visible{outline:3px solid " + GOLD + ";outline-offset:1px}",
-      ".rk-nick .hint{min-height:22px;margin:8px 0 12px;font-size:13px;color:" + OCHRE + "}",
-      ".rk-nick .row{display:flex;gap:8px}.rk-nick .row .rk-btn:first-child{flex:0 0 auto}",
+      ".rk-nickf,.rk-nickf *{box-sizing:border-box}",
+      ".rk-nickf{display:block;width:100%;max-width:520px;margin:14px auto;padding:14px 16px 10px;background:#fff;color:" + INK + ";border:1.5px solid " + GOLD + ";border-radius:14px;text-align:left;font-family:" + SANS + ";font-size:15px;line-height:1.55;position:static}",
+      ".rk-nickf .nf-f{display:block;margin:0}.rk-nickf .nf-t{display:block;margin:0 0 8px;font:600 17px/1.4 " + SERIF + ";color:" + INK + "}",
+      ".rk-nickf input{display:block;width:100%;min-height:48px;padding:10px 14px;border:1.5px solid " + INK + ";border-radius:12px;background:#fff;color:" + INK + ";font:inherit;font-size:17px;margin:0}",
+      ".rk-nickf input:focus-visible{outline:3px solid " + GOLD + ";outline-offset:1px}",
+      ".rk-nickf .nf-note{margin:8px 0 0;font-size:13px;line-height:1.6;color:" + MUTED + "}",
+      ".rk-nickf .nf-hint{min-height:22px;margin:6px 0 4px;font-size:13px;line-height:1.6;color:" + OCHRE + "}",
+      ".rk-nickf .nf-row{display:flex;gap:8px;margin:6px 0 4px}.rk-nickf .nf-row .rk-btn:first-child{flex:0 0 auto}",
+      ".rk-nickbar{position:static;display:block;width:100%;padding:12px 14px 4px;background:" + PAPER + ";border-bottom:2px solid " + GOLD + ";z-index:1}",
+      ".rk-nickbar .rk-nickf{margin:0 auto}",
+      ".rk-nick-off{opacity:.5;cursor:not-allowed}",
+      ".rk-nick-block{pointer-events:none;user-select:none;opacity:.45}",
       ".rk-toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483300;background:" + INK + ";color:#fff;font:14px/1.5 " + SANS + ";padding:10px 16px;border-radius:999px;max-width:86vw;text-align:center}"
     ].join("\n");
     var st = document.createElement("style");
@@ -299,58 +303,151 @@
     delete memOk[cfg.id];
     try { root.sessionStorage.removeItem(okKey()); } catch (e) {}
   }
-  var gate = null, gateTrap = null;
-  /** 昵称门槛：没有确认过昵称就弹出输入框；确认后才执行 cb。opts: { onCancel, title }（onCancel 缺省时「返回」只是关掉弹窗） */
+  /* ---- 昵称输入框：内嵌在每个测评原有的开始页里，不开新页面、不弹窗 ---- */
+  var HINT_EMPTY = "先填一个昵称，才能开始（1–12 个字）。", HINT_SPACE = "昵称不能只有空格，请写一个名字或称呼。";
+  var typed = null;                      // 还没点「开始」时输入框里正在写的内容（页面重绘后不丢）
+  function hintFor(raw) { var v = cleanNick(raw); if (v) return ""; return raw && !/\S/.test(raw) ? HINT_SPACE : HINT_EMPTY; }
+  function setOff(b, off) {
+    if (!b) return;
+    if (off) {
+      if (!b.__rkOff) { b.__rkOff = 1; b.__rkWas = !!b.disabled; }
+      if (!b.disabled) b.disabled = true;
+      if (b.getAttribute("aria-disabled") !== "true") b.setAttribute("aria-disabled", "true");
+      b.classList.add("rk-nick-off");
+    } else if (b.__rkOff) {
+      b.__rkOff = 0; b.disabled = !!b.__rkWas;
+      b.removeAttribute("aria-disabled"); b.classList.remove("rk-nick-off");
+    }
+  }
+  /** 生成一个昵称输入块。opts.bar = true 时带「返回 / 开始测评」两个按钮（用于没有封面的页面里补录）。 */
+  function makeField(opts) {
+    opts = opts || {};
+    var el = document.createElement("div");
+    el.className = "rk-nickf" + (opts.bar ? " rk-inbar" : ""); el.setAttribute("data-rk-skip", "");
+    el.innerHTML = '<label class="nf-f"><span class="nf-t">先告诉我怎么称呼你</span>' +
+      '<input type="text" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="你的昵称（1–12 个字）" aria-label="你的昵称（1–12 个字）" data-rk-nick-input></label>' +
+      '<p class="nf-note">昵称会写在你的结果和导出的图片上，只存在这台设备里，不会上传。</p>' +
+      '<p class="nf-hint" data-rk-nick-hint role="status" aria-live="polite"></p>' +
+      (opts.bar ? '<div class="nf-row">' + (typeof opts.onCancel === "function" ? '<button type="button" class="rk-btn" data-rk-nick-back>返回</button>' : "") + '<button type="button" class="rk-btn primary" data-rk-nick-go disabled>开始测评</button></div>' : "");
+    var inp = el.querySelector("input"), hint = el.querySelector("[data-rk-nick-hint]");
+    var f = { el: el, inp: inp, btns: [], refresh: null };
+    inp.value = typed != null ? typed : getNick();
+    f.refresh = function () {
+      var raw = inp.value, v = cleanNick(raw), h = hintFor(raw);
+      typed = raw;
+      if (hint.textContent !== h) hint.textContent = h;
+      f.btns = f.btns.filter(function (b) { return b.isConnected !== false; });
+      f.btns.forEach(function (b) { setOff(b, !v); });
+      var go = el.querySelector("[data-rk-nick-go]"); if (go) go.disabled = !v;
+    };
+    inp.addEventListener("input", f.refresh);
+    inp.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      e.preventDefault();
+      if (!cleanNick(inp.value)) { f.refresh(); return; }
+      var go = el.querySelector("[data-rk-nick-go]") || f.btns[0];
+      if (go) go.click();
+    });
+    el.__rk = f;
+    return f;
+  }
+
+  /* 封面里的「开始」按钮：cfg.start = 选择器或 [{sel, text, host}]，输入框插在按钮（或 host 容器）前面 */
+  function startTargets() {
+    var out = [], s = cfg.start; if (!s) return out;
+    (Array.isArray(s) ? s : [s]).forEach(function (x) {
+      var sel = typeof x === "string" ? x : x.sel, re = typeof x === "object" && x.text ? new RegExp(x.text) : null, host = typeof x === "object" ? x.host : null;
+      var nodes; try { nodes = document.querySelectorAll(sel); } catch (e) { return; }
+      Array.prototype.forEach.call(nodes, function (e) {
+        if (re && !re.test(e.textContent || "")) return;
+        if (e.closest && e.closest(".rk-nickf")) return;
+        out.push({ btn: e, anchor: (host && e.closest(host)) || e });
+      });
+    });
+    return out;
+  }
+  function decorate() {
+    if (!cfg.start) return;
+    // 这一轮已经确认过昵称（比如刚点过封面的开始）：后面的页面不再重复要求，按钮保持可用
+    if (nickConfirmed()) { Array.prototype.forEach.call(document.querySelectorAll(".rk-nick-off"), function (b) { setOff(b, false); }); return; }
+    startTargets().forEach(function (t) {
+      var b = t.btn, p = t.anchor.parentNode; if (!p) return;
+      var f = null, k;
+      for (k = 0; k < p.children.length; k++) if (p.children[k].classList && p.children[k].classList.contains("rk-nickf") && p.children[k].__rk && !p.children[k].classList.contains("rk-inbar")) { f = p.children[k].__rk; break; }
+      if (!f) { injectCss(); f = makeField(); p.insertBefore(f.el, t.anchor); }
+      if (f.btns.indexOf(b) < 0) f.btns.push(b);
+      b.__rkF = f; if (!b.classList.contains("rk-nick-btn")) b.classList.add("rk-nick-btn");
+      f.refresh();
+    });
+  }
+  var decoTimer = 0, decoObs = null;
+  function scheduleDecorate() {
+    if (decoTimer) return;
+    decoTimer = setTimeout(function () { decoTimer = 0; try { decorate(); } catch (e) {} }, 30);
+  }
+  function watchStart() {
+    if (decoObs || typeof MutationObserver === "undefined") { scheduleDecorate(); return; }
+    var begin = function () { decoObs = new MutationObserver(scheduleDecorate); decoObs.observe(document.body, { childList: true, subtree: true }); decorate(); };
+    if (document.body) begin(); else document.addEventListener("DOMContentLoaded", begin);
+  }
+  // 点封面上的「开始」：先确认昵称（空的就拦住），再把点击交给页面原来的处理函数
+  document.addEventListener("click", function (e) {
+    var t = e.target, b = t && t.closest ? t.closest(".rk-nick-btn") : null;
+    if (!b || !b.__rkF) return;
+    var v = cleanNick(b.__rkF.inp.value);
+    if (!v) { e.preventDefault(); e.stopImmediatePropagation(); b.__rkF.refresh(); try { b.__rkF.inp.focus(); } catch (x) {} return; }
+    setNick(v); markOk(v); typed = null;
+  }, true);
+
+  /* 没有封面可嵌的页面（深链、刷新恢复进度、重新测试后直接进题）：在当前页面最上方内嵌一块输入框，补录之前下面的内容不可操作 */
+  var nbar = null, inerted = [];
   function ensureNick(cb, opts) {
     opts = opts || {};
     if (nickConfirmed()) { if (cb) cb(); return; }
-    if (gate) return;
+    if (nbar) return;
     injectCss();
-    var d = document.createElement("div");
-    d.className = "rk-nick"; d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-labelledby", "rk-nick-t");
-    d.innerHTML = '<div class="box"><h3 id="rk-nick-t">先告诉我怎么称呼你</h3>' +
-      "<p>昵称会写在你的结果和导出的图片上，只存在这台设备里，不会上传。</p>" +
-      '<label class="f"><span>你的昵称（1–12 个字）</span><input type="text" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" data-rk-nick-input></label>' +
-      '<p class="hint" data-rk-nick-hint role="status" aria-live="polite"></p>' +
-      '<div class="row"><button type="button" class="rk-btn" data-rk-nick-back>返回</button><button type="button" class="rk-btn primary" data-rk-nick-go disabled>开始测评</button></div></div>';
-    document.body.appendChild(d);
-    gate = d;
-    var inp = d.querySelector("input"), go = d.querySelector("[data-rk-nick-go]"), hint = d.querySelector("[data-rk-nick-hint]");
-    inp.value = getNick();
-    function refresh() {
-      var raw = inp.value, v = cleanNick(raw);
-      go.disabled = !v;
-      if (!v) hint.textContent = raw && /\S/.test(raw) === false ? "昵称不能只有空格，请写一个名字或称呼。" : "先填一个昵称，才能开始（1–12 个字）。";
-      else hint.textContent = "";
-    }
-    function close() { closeNick(); }
+    var f = makeField({ bar: true, onCancel: opts.onCancel });
+    var d = document.createElement("div"); d.className = "rk-nickbar"; d.setAttribute("role", "group"); d.setAttribute("aria-label", "先告诉我怎么称呼你");
+    d.appendChild(f.el);
+    var go = f.el.querySelector("[data-rk-nick-go]"); f.btns = [];
     function confirmGo() {
-      var v = cleanNick(inp.value); if (!v) { refresh(); inp.focus(); return; }
-      setNick(v); markOk(v); close(); if (cb) cb();
+      var v = cleanNick(f.inp.value); if (!v) { f.refresh(); f.inp.focus(); return; }
+      setNick(v); markOk(v); typed = null; closeNick(); if (cb) cb();
     }
-    inp.addEventListener("input", refresh);
-    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); confirmGo(); } });
     go.addEventListener("click", confirmGo);
-    d.querySelector("[data-rk-nick-back]").addEventListener("click", function () { close(); if (typeof opts.onCancel === "function") opts.onCancel(); });
-    gateTrap = function (e) { if (gate && !gate.contains(e.target)) { try { inp.focus(); } catch (x) {} } };
-    document.addEventListener("focusin", gateTrap);
-    refresh();
-    setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 30);
+    var back = f.el.querySelector("[data-rk-nick-back]");
+    if (back) back.addEventListener("click", function () { closeNick(); opts.onCancel(); });
+    nbar = d;
+    Array.prototype.forEach.call(document.body.children, function (c) {
+      if (c === d || /^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(c.tagName) || (c.className && /\brk-(ov|toast)\b/.test(String(c.className)))) return;
+      inerted.push([c, c.inert, c.getAttribute("aria-hidden")]);
+      try { c.inert = true; } catch (e) {} c.setAttribute("aria-hidden", "true"); c.classList.add("rk-nick-block");
+    });
+    document.body.insertBefore(d, document.body.firstChild);
+    f.refresh();
+    try { root.scrollTo(0, 0); } catch (e) {}
+    setTimeout(function () { try { f.inp.focus(); f.inp.select(); } catch (e) {} }, 30);
   }
-  /** 离开测试页（比如返回首页）时关掉昵称弹窗。 */
+  /** 离开测试页（比如返回首页）时收起补录输入框。 */
   function closeNick() {
-    if (gate && gate.parentNode) gate.parentNode.removeChild(gate);
-    gate = null;
-    if (gateTrap) { document.removeEventListener("focusin", gateTrap); gateTrap = null; }
+    if (nbar && nbar.parentNode) nbar.parentNode.removeChild(nbar);
+    nbar = null;
+    inerted.forEach(function (x) {
+      try { x[0].inert = !!x[1]; } catch (e) {}
+      if (x[2] == null) x[0].removeAttribute("aria-hidden"); else x[0].setAttribute("aria-hidden", x[2]);
+      x[0].classList.remove("rk-nick-block");
+    });
+    inerted = [];
   }
-  /** 在每次渲染时调用：处于答题中（含深链、刷新恢复进度、重新测试后的第一题）且没确认过昵称，就先补录。 */
+  /** 在每次渲染时调用：处于答题中（含深链、刷新恢复进度、重新测试后的第一题）且没确认过昵称，就在当前页面里补录。 */
   function guard(answering, onCancel) {
     if (answering && !nickConfirmed()) ensureNick(null, { onCancel: onCancel });
+    else if (!answering && nbar) closeNick();
   }
 
   /* ---------- 把结果页抓成「分节」 ---------- */
   // 分节：{t:"h",l,x} 标题 · {t:"p",x} 段落 · {t:"ul",it:[{x,d,n}]} 列表 · {t:"table",r:[[…]],hd} 表格 · {t:"row",c:[…]} 一行多格 · {t:"svg",w,h,x} 图表 · {t:"hex",drive:[],pursue:[]} 六芒星
-  var SKIP_SEL = "script,style,noscript,template,button,input,select,textarea,[hidden],[data-rk-bar],.rk-bar,.rk-ov,.rk-dlg,.rk-nick,.rk-toast,[data-rk-skip]";
+  var SKIP_SEL = "script,style,noscript,template,button,input,select,textarea,[hidden],[data-rk-bar],.rk-bar,.rk-ov,.rk-dlg,.rk-nickf,.rk-nickbar,.rk-toast,[data-rk-skip]";
   function normText(s) { return String(s).replace(/[ \t\r\f\v\u00a0]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/^\s+|\s+$/g, ""); }
   function capture(rootEl, opts) {
     opts = opts || {};
@@ -954,7 +1051,8 @@
   /* ---------- 对外接口 ---------- */
   root.ResultKit = {
     MAX: MAX,
-    configure: function (o) { for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) cfg[k] = o[k]; cur = null; lastSave = null; },
+    configure: function (o) { cfg.start = null; for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) cfg[k] = o[k]; cur = null; lastSave = null; if (cfg.start) watchStart(); },
+    decorate: decorate,
     save: save,
     list: list,
     bar: bar,

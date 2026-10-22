@@ -326,7 +326,7 @@
     el.className = "rk-nickf" + (opts.bar ? " rk-inbar" : ""); el.setAttribute("data-rk-skip", "");
     el.innerHTML = '<label class="nf-f"><span class="nf-t">先告诉我怎么称呼你</span>' +
       '<input type="text" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="你的昵称（1–12 个字）" aria-label="你的昵称（1–12 个字）" data-rk-nick-input></label>' +
-      '<p class="nf-note">昵称会写在你的结果和导出的图片上，只存在这台设备里，不会上传。</p>' +
+      '<p class="nf-note">昵称会写在你的结果、导出的图片和分享链接上。</p>' +
       '<p class="nf-hint" data-rk-nick-hint role="status" aria-live="polite"></p>' +
       (opts.bar ? '<div class="nf-row">' + (typeof opts.onCancel === "function" ? '<button type="button" class="rk-btn" data-rk-nick-back>返回</button>' : "") + '<button type="button" class="rk-btn primary" data-rk-nick-go disabled>开始测评</button></div>' : "");
     var inp = el.querySelector("input"), hint = el.querySelector("[data-rk-nick-hint]");
@@ -679,7 +679,7 @@
     if (st.status === "corrupt") warn = '<p class="rk-note warn">之前保存的记录读不出来了，再做一次测试就会重新开始记录。</p>';
     var body = warn;
     if (!items.length) body += '<div class="rk-empty">还没有记录。<br>做完一次测试，结果会自动留在这里。</div>';
-    else body += '<p class="rk-note">最多保留最近 ' + MAX + " 条，只存在这台设备上，不会上传。</p>" + items.map(function (r) {
+    else body += '<p class="rk-note">最多保留最近 ' + MAX + " 条，存在这台设备上。分享链接在结果页另外生成。</p>" + items.map(function (r) {
       return '<div class="rk-item"><button type="button" class="rk-open" data-rk-open="' + esc(r.id) + '"><b>' + esc(fmt(r.t)) + (r.nick ? " · " + esc(r.nick) : "") + "</b><span>" + esc(r.s.headline) + '</span></button><button type="button" class="rk-del" data-rk-del="' + esc(r.id) + '" aria-label="删除这条记录">删除</button></div>';
     }).join("");
     var foot = '<button type="button" class="rk-btn danger" data-rk-clear ' + (items.length ? "" : "disabled") + '>清空全部</button><button type="button" class="rk-btn primary" data-rk-close>关闭</button>';
@@ -993,9 +993,9 @@
 
   /* ---------- 页面里的按钮条 ---------- */
   function noteHtml() {
-    if (lastSave && lastSave.ok) return '<p class="rk-note" data-rk-note="ok">✓ 这次结果已保存在这台设备（不上传），可在「历史记录」里再看。</p>';
+    if (lastSave && lastSave.ok) return '<p class="rk-note" data-rk-note="ok">✓ 这次结果已保存在这台设备，可在「历史记录」里再看。</p>';
     if (lastSave && !lastSave.ok) return '<p class="rk-note warn" data-rk-note="fail">这台设备暂时存不下记录（可能是无痕模式或空间已满）。结果照常能看，建议先点「导出图片」留一份。</p>';
-    return '<p class="rk-note" data-rk-note="none">每次做完的结果都会记在「历史记录」里，只存在这台设备上。</p>';
+    return '<p class="rk-note" data-rk-note="none">每次做完的结果都会记在「历史记录」里，存在这台设备上。</p>';
   }
   /** 结果页按钮条（HTML 字符串）。opts.restart === false 不放「重新测试」；opts.export === false 不放「导出图片」（页面已有自己的导出时用）。 */
   function bar(summary, opts) {
